@@ -1,6 +1,27 @@
 # Pngyu
 
-Pngyu is a Front-end GUI application for [pngquant](https://pngquant.org/).
+Pngyu is a GUI image compression application. It uses [pngquant](https://pngquant.org/) for PNG files and Qt's built-in image engine for all other supported formats.
+
+## Supported Formats
+
+| Format | Extension(s) | Compression engine |
+|--------|--------------|--------------------|
+| PNG | `.png` | pngquant (palette quantization) |
+| Animated PNG | `.apng` | pngquant |
+| JPEG | `.jpg` `.jpeg` | Qt JPEG encoder |
+| WebP | `.webp` | Qt WebP encoder |
+| AVIF | `.avif` | Qt AVIF plugin (if available) |
+| TIFF | `.tiff` `.tif` | Qt TIFF encoder (LZW) |
+| HEIC | `.heic` | Qt HEIC plugin (if available) |
+| BMP | `.bmp` | Qt BMP encoder |
+
+> **Note:** HEIC and AVIF require the corresponding Qt image plugins to be installed on the system. All other formats work out of the box.
+
+### Compression quality for non-PNG formats
+
+When using **Custom** compress mode, the *Colors* slider (2–256) maps to an image quality value (1–95). A higher color count produces a higher-quality, larger output; a lower color count produces a smaller, lower-quality output. In **Default** mode, Qt applies each format's own default quality.
+
+pngquant is only required when PNG or APNG files are in the file list. The app works without pngquant for all other formats.
 
 ## Download
 
