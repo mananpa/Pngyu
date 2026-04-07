@@ -1,7 +1,10 @@
 #include "executecompressworkerthread.h"
 
+#include <QBuffer>
 #include <QDebug>
 #include <QFile>
+#include <QFileInfo>
+#include <QImage>
 #include <QMutexLocker>
 
 #include "executecompressthread.h"
@@ -31,20 +34,23 @@ pngyu::CompressResult ExecuteCompressWorkerThread::execute_compress(
           .arg(tr("Output file already exists.") + " " + (dst_path));
     }
 
-    const QByteArray& src_png_data =
-        pngyu::util::png_file_to_bytearray(src_path);
+    const QByteArray& src_data = pngyu::util::png_file_to_bytearray(src_path);
 
-    // init compress thred instance,
-    // compress process will execute in other thread via this instance.
-    ExecuteCompressThread compress_thread;
-    compress_thread.set_executable_pngquant_path(pngquant_path);
-    compress_thread.set_pngquant_option(option);
+    const QString suffix = QFileInfo(src_path).suffix().toLower();
+    const bool is_png_format = (suffix == "png" || suffix == "apng");
 
-    {  // exetute pngquant command
+    QByteArray dst_data;
+
+    if (is_png_format) {
+      // Use pngquant for PNG/APNG files
+      ExecuteCompressThread compress_thread;
+      compress_thread.set_executable_pngquant_path(pngquant_path);
+      compress_thread.set_pngquant_option(option);
+
       compress_thread.clear_result();
-      compress_thread.set_original_png_data(src_png_data);
+      compress_thread.set_original_png_data(src_data);
       compress_thread.start();
-      // waiting for compress finished
+
       bool canceled = false;
       while (!compress_thread.wait(100)) {
         if (stop_request && (*stop_request)) {
@@ -53,45 +59,99 @@ pngyu::CompressResult ExecuteCompressWorkerThread::execute_compress(
         }
       }
 
-      // If canceled, terminate the thread and wait for it to finish
       if (canceled) {
         compress_thread.terminate();
         compress_thread.wait();
         throw tr("Canceled");
       }
 
-      // compres result check
       if (!compress_thread.is_compress_succeeded()) {
         throw compress_thread.error_string();
       }
+
+      dst_data = (force_execute_if_negative || compress_thread.saved_size() >= 0)
+                     ? compress_thread.output_png_data()
+                     : compress_thread.original_png_data();
+    } else {
+      // Use Qt image compression for non-PNG formats (JPEG, WebP, TIFF, etc.)
+      dst_data = compress_image_with_qt(src_data, suffix, option);
+      if (dst_data.isEmpty()) {
+        throw tr("Error: %1")
+            .arg(tr("Image compression failed or format not supported."));
+      }
+      if (!force_execute_if_negative &&
+          dst_data.size() >= src_data.size()) {
+        dst_data = src_data;  // keep original if compression made it larger
+      }
     }
 
-    const QByteArray& dst_png_data =
-        (force_execute_if_negative || compress_thread.saved_size() >= 0)
-            ? compress_thread.output_png_data()
-            : compress_thread.original_png_data();
+    if (stop_request && (*stop_request)) {
+      throw tr("Canceled");
+    }
 
     if (dst_path_exists) {
-      // remove old file
       if (!QFile::remove(dst_path)) {
         throw tr("Error: %1").arg(tr("Couldn't overwrite existing file."));
       }
     }
 
-    // copy result file to dst_path
-    if (!pngyu::util::write_png_data(dst_path, dst_png_data)) {
+    if (!pngyu::util::write_png_data(dst_path, dst_data)) {
       throw tr("Error: %1").arg(tr("Couldn't save output file."));
     }
 
     res.result = true;
-    res.src_size = src_png_data.size();
-    res.dst_size = dst_png_data.size();
+    res.src_size = src_data.size();
+    res.dst_size = dst_data.size();
   } catch (const QString& ex) {
     res.result = false;
     res.error_message = ex;
   }
 
   return res;
+}
+
+QByteArray ExecuteCompressWorkerThread::compress_image_with_qt(
+    const QByteArray& src_data, const QString& format,
+    const pngyu::PngquantOption& option) {
+  QImage image;
+  if (!image.loadFromData(src_data)) {
+    return QByteArray();
+  }
+
+  // Map format extension to Qt format identifier
+  QString qt_format;
+  if (format == "jpg" || format == "jpeg") {
+    qt_format = "JPEG";
+  } else if (format == "webp") {
+    qt_format = "WEBP";
+  } else if (format == "tiff" || format == "tif") {
+    qt_format = "TIFF";
+  } else if (format == "bmp") {
+    qt_format = "BMP";
+  } else if (format == "heic") {
+    qt_format = "HEIC";
+  } else if (format == "avif") {
+    qt_format = "AVIF";
+  } else {
+    return QByteArray();
+  }
+
+  // Map ncolors (2-256) to quality (1-95). Use -1 (format default) when
+  // no custom color count is set (default compress mode).
+  int quality = -1;
+  const int ncolors = option.get_ncolors();
+  if (ncolors > 0) {
+    quality = std::max(1, static_cast<int>(ncolors * 95.0 / 256.0));
+  }
+
+  QByteArray dst_data;
+  QBuffer buffer(&dst_data);
+  buffer.open(QIODevice::WriteOnly);
+  const bool success =
+      image.save(&buffer, qt_format.toUtf8().constData(), quality);
+  buffer.close();
+
+  return success ? dst_data : QByteArray();
 }
 
 pngyu::CompressResult ExecuteCompressWorkerThread::execute_compress(

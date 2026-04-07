@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(QT_BASE=\"/e/Usuarios/Tony/OneDrive/Documents/GitHub/obs-studio/.claude/worktrees/happy-visvesvaraya/.deps/obs-deps-qt6-2025-08-23-x64\" ls \"$QT_BASE/lib/cmake/Qt6/\")"
+    ]
+  }
+}

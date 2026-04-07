@@ -61,6 +61,20 @@ inline bool has_png_extention(const QFileInfo& file) {
   return file.suffix().compare("png", Qt::CaseInsensitive) == 0;
 }
 
+// Returns true for PNG and APNG (handled by pngquant)
+inline bool has_png_like_extension(const QFileInfo& file) {
+  const QString s = file.suffix().toLower();
+  return s == "png" || s == "apng";
+}
+
+// Returns true for any image format supported by Pngyu
+inline bool is_supported_image_extension(const QFileInfo& file) {
+  const QString s = file.suffix().toLower();
+  return s == "png" || s == "apng" || s == "jpg" || s == "jpeg" ||
+         s == "webp" || s == "avif" || s == "tiff" || s == "tif" ||
+         s == "heic" || s == "bmp";
+}
+
 inline bool can_read_png_file(const QFileInfo& file) {
   QImageReader image_reader(file.absoluteFilePath(), "png");
   return image_reader.canRead();

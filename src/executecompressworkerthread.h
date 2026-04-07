@@ -1,6 +1,7 @@
 #ifndef EXECUTECOMPRESSWORKERTHREAD_H
 #define EXECUTECOMPRESSWORKERTHREAD_H
 
+#include <QByteArray>
 #include <QMutex>
 #include <QQueue>
 #include <QTableWidget>
@@ -24,6 +25,10 @@ class ExecuteCompressWorkerThread : public QThread {
 
   static void show_compress_result(QTableWidget* table_widget, const int row,
                                    const pngyu::CompressResult& result);
+
+  static QByteArray compress_image_with_qt(const QByteArray& src_data,
+                                           const QString& format,
+                                           const pngyu::PngquantOption& option);
 
   void set_queue_ptr(QQueue<pngyu::CompressQueueData>* queue_ptr,
                      QMutex* mutex = 0);

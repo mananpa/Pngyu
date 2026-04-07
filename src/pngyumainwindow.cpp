@@ -179,8 +179,8 @@ PngyuMainWindow::PngyuMainWindow(QWidget* parent)
     const QStringList& executable_pngquant_list =
         pngyu::find_executable_pngquant();
     if (executable_pngquant_list.empty()) {
-      set_busy_mode(true);
-      ui->statusBar->showMessage(tr("Executable pngquant not found."));
+      ui->statusBar->showMessage(
+          tr("Executable pngquant not found. PNG compression is unavailable."));
     } else {
       set_executable_pngquant_path(executable_pngquant_list.first());
     }
@@ -1116,9 +1116,9 @@ void PngyuMainWindow::append_file_info_recursive(
     return;
   }
   if (file_info
-          .isFile()) {  // if file_info is file, png check and add to file_list
-    const bool is_png = pngyu::util::has_png_extention(file_info);
-    if (is_png && !m_file_list.contains(file_info)) {
+          .isFile()) {  // if file_info is file, check format and add to list
+    if (pngyu::util::is_supported_image_extension(file_info) &&
+        !m_file_list.contains(file_info)) {
       m_file_list.push_back(file_info);
     }
   } else if (file_info.isDir()) {  // if file_info is dir, call this function
@@ -1145,10 +1145,23 @@ bool PngyuMainWindow::is_other_output_directory_valid() const {
 ////////
 
 void PngyuMainWindow::exec_pushed() {
-  if (!pngyu::is_executable_pnqguant(QFileInfo(executable_pngquant_path()))) {
-    QMessageBox::warning(this, "", "pngquant path is invalid");
-    menu_preferences_pushed();
-    return;
+  {  // check pngquant only when PNG/APNG files are in the list
+    bool has_png_files = false;
+    QTableWidget* const tw = file_list_table_widget();
+    for (int r = 0; r < tw->rowCount() && !has_png_files; ++r) {
+      const QTableWidgetItem* item = tw->item(r, pngyu::COLUMN_ABSOLUTE_PATH);
+      if (item &&
+          pngyu::util::has_png_like_extension(QFileInfo(item->text()))) {
+        has_png_files = true;
+      }
+    }
+    if (has_png_files &&
+        !pngyu::is_executable_pnqguant(
+            QFileInfo(executable_pngquant_path()))) {
+      QMessageBox::warning(this, "", "pngquant path is invalid");
+      menu_preferences_pushed();
+      return;
+    }
   }
 
 #ifdef Q_OS_MACOS
@@ -1336,7 +1349,16 @@ void PngyuMainWindow::preview_window_closed() {
 
 void PngyuMainWindow::add_file_button_pushed() {
   const QStringList filepath_list = QFileDialog::getOpenFileNames(
-      this, QString(), QDir::homePath(), "PNG file (*.png);;");
+      this, QString(), QDir::homePath(),
+      tr("Image files (*.png *.apng *.jpg *.jpeg *.webp *.avif *.tiff *.tif "
+         "*.heic *.bmp);;"
+         "PNG files (*.png *.apng);;"
+         "JPEG files (*.jpg *.jpeg);;"
+         "WebP files (*.webp);;"
+         "AVIF files (*.avif);;"
+         "TIFF files (*.tiff *.tif);;"
+         "HEIC files (*.heic);;"
+         "BMP files (*.bmp)"));
 
   if (filepath_list.empty()) {
     return;
